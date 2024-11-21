@@ -181,10 +181,122 @@ class App:
         memoria = Memoria(tamano=3, algoritmo="FIFO")
 
     def planificacion_window(self):
-        pass
+        plan_win = tk.Toplevel(self.root)
+        plan_win.title("Planificación de Procesos")
+        plan_win.geometry("600x500")
+        plan_win.config(bg="#f0f4f7")
+
+        def toggle_quantum_entry(event=None):
+            if self.selected_algorithm.get() == "Round Robin":
+                quantum_entry.config(state="normal")
+            else:
+                quantum_entry.config(state="disabled")
+
+        def add_process():
+            pid = pid_entry.get()
+            tiempo = tiempo_entry.get()
+            prioridad = prioridad_entry.get()
+            if not pid or not tiempo or not prioridad:
+                messagebox.showerror("Error", "Todos los campos son obligatorios.")
+                return
+
+            proceso = {"id": pid, "tiempo": int(tiempo), "prioridad": int(prioridad)}
+            procesos.append(proceso)
+            memoria.cargar_pagina(pid)
+            messagebox.showinfo(
+                "Éxito", f"Proceso {pid} añadido y cargado en memoria."
+            )
+
+        def execute_processes():
+            algoritmo = self.selected_algorithm.get()
+            global quantum_rr
+
+            if algoritmo == "Round Robin":
+                quantum_rr = int(quantum_entry.get())
+                orden = round_robin(procesos, quantum_rr)
+                tiempos_espera, tiempos_retorno, promedio_espera, promedio_retorno = calcular_estadisticas(procesos)
+                messagebox.showinfo(
+                    "Estadísticas",
+                    f"Promedio de Espera: {promedio_espera}\nPromedio de Retorno: {promedio_retorno}",
+                )
+                graficar_estadisticas(tiempos_espera, tiempos_retorno, algoritmo)
+            else:
+                if algoritmo == "FIFO":
+                    procesos.sort(key=lambda p: p["id"])
+                elif algoritmo == "SJF":
+                    procesos.sort(key=lambda p: p["tiempo"])
+                tiempos_espera, tiempos_retorno, promedio_espera, promedio_retorno = calcular_estadisticas(procesos)
+                messagebox.showinfo(
+                    "Estadísticas",
+                    f"Promedio de Espera: {promedio_espera}\nPromedio de Retorno: {promedio_retorno}",
+                )
+                graficar_estadisticas(tiempos_espera, tiempos_retorno, algoritmo)
+
+        tk.Label(plan_win, text="ID del Proceso:", bg="#f0f4f7").pack()
+        pid_entry = tk.Entry(plan_win)
+        pid_entry.pack()
+
+        tk.Label(plan_win, text="Tiempo:", bg="#f0f4f7").pack()
+        tiempo_entry = tk.Entry(plan_win)
+        tiempo_entry.pack()
+
+        tk.Label(plan_win, text="Prioridad:", bg="#f0f4f7").pack()
+        prioridad_entry = tk.Entry(plan_win)
+        prioridad_entry.pack()
+
+        tk.Label(plan_win, text="Algoritmo:", bg="#f0f4f7").pack()
+        algo_menu = ttk.Combobox(
+            plan_win,
+            values=["FIFO", "SJF", "Round Robin"],
+            textvariable=self.selected_algorithm,
+        )
+        algo_menu.pack()
+        algo_menu.bind("<<ComboboxSelected>>", toggle_quantum_entry)
+
+        tk.Label(plan_win, text="Quantum (Solo Round Robin):", bg="#f0f4f7").pack()
+        quantum_entry = tk.Entry(plan_win, state="disabled")
+        quantum_entry.pack()
+
+        tk.Button(
+            plan_win,
+            text="Añadir Proceso",
+            bg="#4caf50",
+            fg="#ffffff",
+            command=add_process,
+        ).pack(pady=10)
+        tk.Button(
+            plan_win,
+            text="Ejecutar Procesos",
+            bg="#2196f3",
+            fg="#ffffff",
+            command=execute_processes,
+        ).pack(pady=10)
 
     def memoria_window(self):
-        pass
+        mem_win = tk.Toplevel(self.root)
+        mem_win.title("Administración de Memoria")
+        mem_win.geometry("600x400")
+        mem_win.config(bg="#f0f4f7")
+
+        tk.Label(
+            mem_win,
+            text="Estado de la Memoria",
+            font=("Helvetica", 16),
+            bg="#f0f4f7",
+        ).pack(pady=20)
+
+        def update_memory_table():
+            table.delete(*table.get_children())
+            for idx, pagina in enumerate(memoria.paginas):
+                table.insert("", "end", values=(idx + 1, pagina))
+
+        cols = ("Bloque", "Página (Proceso)")
+        table = ttk.Treeview(mem_win, columns=cols, show="headings", height=10)
+        table.heading("Bloque", text="Bloque")
+        table.heading("Página (Proceso)", text="Página (Proceso)")
+        table.pack(pady=20)
+
+        update_memory_table()
 
     def archivos_window(self):
         arch_win = tk.Toplevel(self.root)
@@ -199,7 +311,7 @@ class App:
                 return
             entrada_comando.delete(0, tk.END)
 
-            comando_split = comando.split(maxsplit=2)
+            comando_split = comando.split()
             cmd = comando_split[0]
             args = comando_split[1:]
 
@@ -232,24 +344,6 @@ class App:
                     salida.insert(tk.END, f"'{args[0]}' eliminado con éxito.\n")
                 else:
                     salida.insert(tk.END, "Uso: rm <nombre>\n")
-            elif cmd == "write":
-                if len(args) >= 2:
-                    archivo = args[0]
-                    texto = args[1].strip('"')
-                    write(archivo, texto)
-                    salida.insert(tk.END, f"Se escribió en el archivo '{archivo}': {texto}\n")
-                else:
-                    salida.insert(tk.END, "Uso: write <nombre_archivo> \"texto\"\n")
-            elif cmd == "read":
-                if args:
-                    archivo = args[0]
-                    contenido = sistema_archivos[directorio_actual].get(archivo, None)
-                    if contenido is not None:
-                        salida.insert(tk.END, f"Contenido del archivo '{archivo}': {contenido}\n")
-                    else:
-                        salida.insert(tk.END, f"El archivo '{archivo}' está vacío o no existe.\n")
-                else:
-                    salida.insert(tk.END, "Uso: read <nombre_archivo>\n")
             elif cmd == "help":
                 salida.insert(
                     tk.END,
@@ -258,8 +352,6 @@ class App:
                     "  ls                        - Listar contenido del directorio actual.\n"
                     "  touch <nombre_archivo>    - Crear un archivo.\n"
                     "  rm <nombre>               - Eliminar un archivo o directorio.\n"
-                    "  write <nombre> \"texto\"    - Escribir texto en un archivo.\n"
-                    "  read <nombre>             - Leer contenido de un archivo.\n"
                     "  exit                      - Cerrar esta ventana.\n",
                 )
             elif cmd == "exit":
